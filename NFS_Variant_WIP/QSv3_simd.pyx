@@ -35,11 +35,11 @@ workers=1 #max amount of parallel processes to use
 quad_co_per_worker=1 #Amount of quadratic coefficients to check. Keep as small as possible.
 base=1_000
 small_base=1000
-qbase=5_00
+qbase=10
 quad_sieve_size=10
 g_debug=0 #0 = No debug, 1 = Debug, 2 = A lot of debug
 g_lift_lim=0.5
-thresvar=30  ##Log value base 2 for when to check smooths with trial factorization. Eventually when we fix all the bugs we should be able to furhter lower this.
+thresvar=1  ##Log value base 2 for when to check smooths with trial factorization. Eventually when we fix all the bugs we should be able to furhter lower this.
 lp_multiplier=2
 min_prime=1
 g_enable_custom_factors=0
@@ -159,7 +159,7 @@ def gcd(a,b): # Euclid's algorithm ##To do: Use a version without recursion?
     else:
         return gcd(b,a)
         
-def QS(n,factor_list,sm,xlist,flist,quad_flist,z_plist):
+def QS(n,factor_list,sm,xlist,flist,quad_flist,z_plist,modk):
     g_max_smooths=small_base*1+2+qbase+2
     if len(sm) > g_max_smooths: 
         del sm[g_max_smooths:]
@@ -167,24 +167,28 @@ def QS(n,factor_list,sm,xlist,flist,quad_flist,z_plist):
         del flist[g_max_smooths:]  
     M2 = build_matrix(factor_list, sm, flist,quad_flist,z_plist)
     null_space=solve_bits(M2)
-    f1,f2=extract_factors(n, sm, xlist, null_space)
+    f1,f2=extract_factors(n, sm, xlist, null_space,modk)
     if f1 != 0:
         print("[SUCCESS]Factors are: "+str(f1)+" and "+str(f2))
         return f1,f2   
     print("[FAILURE]No factors found")
     return 0
 
-def extract_factors(N, relations, roots, null_space):
+def extract_factors(N, relations, roots, null_space,modk):
     n = len(relations)
     for vector in null_space:
         prod_left = 1
         prod_right = 1
+        print("Checking")
         for idx in range(len(relations)):
             bit = vector & 1
             vector = vector >> 1
             if bit == 1:
                 prod_left *= roots[idx]
+                print("adding left (zx^2): "+str(roots[idx]))
                 prod_right *= relations[idx]
+                print("adding right (zx^2+yx-n): "+str(relations[idx]))
+                print("adding poly: "+str(modk[idx][3])+"*"+str(modk[idx][2])+"^2+"+str(modk[idx][0])+"*"+str(modk[idx][1])+"*"+str(modk[idx][2])+"-"+str(N)+" = "+str(relations[idx]))#str(modk[idx]))
             idx += 1
         sqrt_right = math.isqrt(prod_right)
         sqrt_left = math.isqrt(prod_left)
@@ -198,7 +202,7 @@ def extract_factors(N, relations, roots, null_space):
             print("something fucked up2")
             time.sleep(10000)
         if sqr1 != sqr2:
-            print("ERROR ERROR")
+            print("ERROR: FIXME... we need to adjust the result... perhaps some type of squar root over a finite field like NFS")
             time.sleep(10000)
         ###End debug shit#########
         sqrt_left = sqrt_left % N
@@ -646,9 +650,9 @@ cdef construct_interval(list ret_array,partials,n,primeslist,hmap,large_prime_bo
 
     tnum = int(((2*n)**mod_mul))
     tnum_bit=int(bitlen(tnum)*1)
-    rootlist,polylist,flist,quadflist=generate_large_square(n,many_primes,valid_quads,valid_quads_factors,sprimelist_f,interval_list,roots,interval_list_pos,partials,large_prime_bound)
+    rootlist,polylist,flist,quadflist,modk=generate_large_square(n,many_primes,valid_quads,valid_quads_factors,sprimelist_f,interval_list,roots,interval_list_pos,partials,large_prime_bound)
     print("\nSmooths found: "+str(len(rootlist)))#+" rootlist: "+str(rootlist))
-    test=QS(n,sprimelist,polylist,rootlist,flist,quadflist,primeslist2)  
+    test=QS(n,sprimelist,polylist,rootlist,flist,quadflist,primeslist2,modk)  
     return
 
 cdef lift_root(r,prime,n,quad_co,exp):
@@ -713,110 +717,145 @@ cdef factorise_squares(value,factor_base):
         i+=1
     return value,seen_primes,total_square
 
+def reduce_smooth_size(seen_primes,quad,root,n):
+    print("seen_primes: ",seen_primes)
+    mod=1
+    for p in seen_primes:
+        mod*=1
+    print("mod: ",mod)
+    poly_val=quad*root**2-n
+    i=0
+    while i < 1000:
+        y=mod*i
+        poly_val=quad*root**2+y*root-n
+        print("poly_val:",poly_val)
+        i+=1
 
 def generate_large_square(n,many_primes,valid_quads,valid_quads_factors,sprimelist_f,interval_list,roots,interval_list_pos,partials,large_prime_bound):
     root_list=[]
     poly_list=[]
     flist=[]
     quadf_list=[]
+    modk=[]
     i=0
     while i <len(valid_quads):
         quad=valid_quads[i]
         root=roots[i]
 
-        j=0
-        while j < lin_sieve_size:
-            if interval_list[i][j]>thresvar:
-                
-                poly_val=quad*(root-j)**2-n
-                tot=quad*(root-j)**2
+      #  j=0
+      #  while j < lin_sieve_size:
+      #      if interval_list[i][j]>thresvar:
+      #          
+      #          poly_val=quad*(root-j)**2-n
+      #          tot=quad*(root-j)**2
+              #  print("poly_val: ",poly_val)
+      #          local_factors, value,seen_primes = factorise_fast(poly_val,sprimelist_f)
 
-                local_factors, value,seen_primes = factorise_fast(poly_val,sprimelist_f)
-                quad_local_factors2=copy.copy(valid_quads_factors[i])
+      #          quad_local_factors2=copy.copy(valid_quads_factors[i])
                   #  logged=0
                   #  for p in seen_primes:
                   #      if p != -1 and p != 2:
                   #          logged+=int(math.log2(p))
                  #   print("interval_list[i][j]: "+str(interval_list[i][j])+" seen_primes: "+str(seen_primes)+" logged: "+str(logged)+" quad: "+str(quad))
-                test=math.isqrt(value)
-                if test**2 != value:
-                    if value < large_prime_bound:
-                        if value in partials:
-                            rel, lf, pv,ql = partials[value]
-                            if rel == tot:
-                                j+=1
-                                continue
-                            tot *= rel
-                            local_factors ^= lf
-                            poly_val *= pv
-                            quad_local_factors2 ^=ql
-                        else:
-                            partials[value] = (tot, local_factors, poly_val,quad_local_factors2)
-                            j+=1
-                            continue
-                    else:
-                        j+=1 
-                        continue
+       #         test=math.isqrt(value)
+       #         if test**2 != value:
+       #             if value < large_prime_bound:
+       #                 if value in partials:
+       #                     rel, lf, pv,ql = partials[value]
+       #                     if rel == tot:
+       #                         j+=1
+        #                        continue
+        #                    tot *= rel
+         #                   local_factors ^= lf
+         #                   poly_val *= pv
+         #                   quad_local_factors2 ^=ql
+         #               else:
+         #                   partials[value] = (tot, local_factors, poly_val,quad_local_factors2)
+         #                   j+=1
+         #                   continue
+         #           else:
+        #              j+=1 
+        #                continue
 
 
               
                         
-                if tot not in root_list:
-                           # print("adding")
-                    root_list.append(tot)
-                    poly_list.append(poly_val)
-                    flist.append(local_factors)
-                    quadf_list.append(quad_local_factors2)
-                    print("", end=f"[i]Smooths: {len(root_list)} / {small_base*1+2+qbase}\r")
-                    if len(root_list)>small_base+2+qbase+2:
-                        return root_list,poly_list,flist,quadf_list  
-            j+=1
+         #       if tot not in root_list:
+         #                  # print("adding")
+         #           root_list.append(tot)
+         #           poly_list.append(poly_val)
+         #           flist.append(local_factors)
+         #           quadf_list.append(quad_local_factors2)
+         #           print("", end=f"[i]Smooths: {len(root_list)} / {small_base*1+2+qbase}\r")
+         #           if len(root_list)>small_base+2+qbase+2:
+         #               return root_list,poly_list,flist,quadf_list  
+         #   j+=1
 
-        j=1
+        j=0
         while j < lin_sieve_size:
-            if interval_list_pos[i][j]>thresvar:
+            if interval_list_pos[i][j]>10:
                 poly_val2=quad*(root+j)**2-n
+               # print("initital poly: ",poly_val2)
+
                 tot=quad*(root+j)**2
                 quad_local_factors2=copy.copy(valid_quads_factors[i])
                 local_factors, value,seen_primes = factorise_fast(poly_val2,sprimelist_f)
+                if -1 not in local_factors and 2 not in local_factors:
+                    mod=1
+                    for p in local_factors:
+                        mod*=p
+                   # print("\nmod: "+str(mod)+" local: "+str(local_factors))
+                    k=1
+                    while k < 1000:
+                        y=mod*k
+                        poly_val2=quad*(root+j)**2+y*(root+j)-n
+                        tot=quad*(root+j)**2
+                        quad_local_factors2=copy.copy(valid_quads_factors[i])
+                        local_factors, value,seen_primes = factorise_fast(poly_val2,sprimelist_f)
+                       # print("poly_val:",poly_val)
+                       
+                   # reduce_smooth_size(local_factors,quad,root+j,n)
+                  #  time.sleep(10000)
                    # logged=0
                    # for p in seen_primes:
                     #    if p != -1 and p != 2:
                     #        logged+=int(math.log2(p))
                    # print("interval_list[i][j]: "+str(interval_list_pos[i][j])+" seen_primes: "+str(seen_primes)+" logged: "+str(logged)+" quad: "+str(quad))
 
-                test=math.isqrt(value)
-                if test**2 != value:
-                    if value < large_prime_bound:
-                        if value in partials:
-                            rel, lf, pv,ql = partials[value]
-                            if rel == tot:
-                                j+=1
-                                continue
-                            tot *= rel
-                            local_factors ^= lf
-                            poly_val2 *= pv
-                            quad_local_factors2 ^=ql
-                        else:
-                            partials[value] = (tot, local_factors, poly_val2,quad_local_factors2)
-                            j+=1
-                            continue
-                    else:
-                        j+=1 
-                        continue
+                        test=math.isqrt(value)
+                        if test**2 == value:
+                 #   if value < large_prime_bound:
+                 #       if value in partials:
+                 #           rel, lf, pv,ql = partials[value]
+                 #           if rel == tot:
+                 #               j+=1
+                  #              continue
+                  #          tot *= rel
+                  #          local_factors ^= lf
+                  #          poly_val2 *= pv
+                  #          quad_local_factors2 ^=ql
+                  #      else:
+                  #          partials[value] = (tot, local_factors, poly_val2,quad_local_factors2)
+                  #          j+=1
+                  #          continue
+                  #  else:
+                  #      j+=1 
+                  #      continue
                         
-                if tot not in root_list:
-                    root_list.append(tot)
-                    poly_list.append(poly_val2)
-                    flist.append(local_factors)
-                    quadf_list.append(quad_local_factors2)
-                    print("", end=f"[i]Smooths: {len(root_list)} / {small_base*1+2+qbase}\r")
-                    if len(root_list)>small_base+2+qbase+2:
-                        return root_list,poly_list,flist,quadf_list  
+                            if tot not in root_list:
+                                root_list.append(tot)
+                                poly_list.append(poly_val2)
+                                flist.append(local_factors)
+                                modk.append([mod,k,root+j,quad])
+                                quadf_list.append(quad_local_factors2)
+                                print("", end=f"[i]Smooths: {len(root_list)} / {small_base*1+2+qbase}\r")
+                                if len(root_list)>small_base+2+qbase+2:
+                                    return root_list,poly_list,flist,quadf_list,modk
+                        k+=1  
             j+=1
             #print("Smooth candidate #1: "+str(poly_val)+" Smooth candidate #2: "+str(poly_val2)+" quad: "+str(quad+i)+" bitlength smooth can #1: "+str(bitlen(poly_val))+" bitlength smooth can #2: "+str(bitlen(poly_val2)))
         i+=1
-    return root_list,poly_list,flist,quadf_list
+    return root_list,poly_list,flist,quadf_list,modk
 
 
 
