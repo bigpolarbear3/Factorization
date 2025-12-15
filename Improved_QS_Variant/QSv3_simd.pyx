@@ -39,16 +39,16 @@ qbase=5_00
 quad_sieve_size=10
 g_debug=0 #0 = No debug, 1 = Debug, 2 = A lot of debug
 g_lift_lim=0.5
-thresvar=30  ##Log value base 2 for when to check smooths with trial factorization. Eventually when we fix all the bugs we should be able to furhter lower this.
+thresvar=300000  ##Log value base 2 for when to check smooths with trial factorization. Eventually when we fix all the bugs we should be able to furhter lower this.
 lp_multiplier=2
 min_prime=1
 g_enable_custom_factors=0
 g_p=107
 g_q=41
-mod_mul=0.05
+mod_mul=0.25
 g_max_exp=10
 lin_sieve_size=1000
-
+max_diff=1_000_000
 
 ##Key gen function##
 def power(x, y, p):
@@ -159,13 +159,13 @@ def gcd(a,b): # Euclid's algorithm ##To do: Use a version without recursion?
     else:
         return gcd(b,a)
         
-def QS(n,factor_list,sm,xlist,flist,quad_flist,z_plist):
-    g_max_smooths=small_base*1+2+qbase+2
+def QS(n,factor_list,sm,xlist,flist):
+    g_max_smooths=small_base*1+2
     if len(sm) > g_max_smooths: 
         del sm[g_max_smooths:]
         del xlist[g_max_smooths:]
         del flist[g_max_smooths:]  
-    M2 = build_matrix(factor_list, sm, flist,quad_flist,z_plist)
+    M2 = build_matrix(factor_list, sm, flist)
     null_space=solve_bits(M2)
     f1,f2=extract_factors(n, sm, xlist, null_space)
     if f1 != 0:
@@ -187,16 +187,14 @@ def extract_factors(N, relations, roots, null_space):
                 prod_right *= relations[idx]
             idx += 1
         sqrt_right = math.isqrt(prod_right)
-        sqrt_left = math.isqrt(prod_left)
+        sqrt_left = prod_left# math.isqrt(prod_left)
         ###Debug shit, remove for final version
-        sqr1=prod_left%N 
+        sqr1=prod_left**2%N 
         sqr2=prod_right%N
         if sqrt_right**2 != prod_right:
             print("something fucked up1")
             time.sleep(10000)
-        if sqrt_left**2 != prod_left:
-            print("something fucked up2")
-            time.sleep(10000)
+
         if sqr1 != sqr2:
             print("ERROR ERROR")
             time.sleep(10000)
@@ -212,7 +210,7 @@ def extract_factors(N, relations, roots, null_space):
     return 0, 0
 
 def solve_bits(matrix):
-    n=small_base+2+qbase+2
+    n=small_base+2
     lsmap = {lsb: 1 << lsb for lsb in range(n+10000)}
     m = len(matrix)
     marks = []
@@ -248,12 +246,12 @@ def solve_bits(matrix):
             break
     return nulls
 
-def build_matrix(factor_base, smooth_nums, factors,quad_flist,z_plist):
+def build_matrix(factor_base, smooth_nums, factors):
     fb_map = {val: i for i, val in enumerate(factor_base)}
-    fb_map2 = {val: i for i, val in enumerate(z_plist)}
+
     ind=1
 
-    M2=[0]*(small_base*1+2+qbase+2)
+    M2=[0]*(small_base*1+2)
     for i in range(len(smooth_nums)):
         for fac in factors[i]:
             idx = fb_map[fac]
@@ -261,13 +259,13 @@ def build_matrix(factor_base, smooth_nums, factors,quad_flist,z_plist):
         ind = ind + ind
 
 
-    offset=(small_base+2)-1
-    ind=1
-    for i in range(len(quad_flist)):
-        for fac in quad_flist[i]:
-            idx = fb_map2[fac]
-            M2[idx+offset] |= ind
-        ind = ind + ind
+  #  offset=(small_base+2)-1
+  #  ind=1
+ #  for i in range(len(quad_flist)):
+  #      for fac in quad_flist[i]:
+   #         idx = fb_map2[fac]
+   #         M2[idx+offset] |= ind
+   #     ind = ind + ind
     return M2
 
 @cython.profile(False)
@@ -366,49 +364,57 @@ cdef tonelli(long long n, long long p):  # tonelli-shanks to solve modular squar
 
     return r
 
-@cython.profile(False)
-def solve_roots(prime,n): 
-    s=1  
-    while jacobi((s*n)%prime,prime)!=1:
-        s+=1
-    if s > 100:
-        print("big s")
-    z_div=modinv(s,prime)  ##To do: Dont need this if we restrict to z=1
-    main_root=tonelli((n*z_div)%prime,prime)
-    if (s*main_root**2-n)%prime !=0:
-        print("fatal error123: ")
-        time.sleep(10000000)
-    try:
-        size=prime*2+1
-        if size > 100:#quad_sieve_size*2:
-            size= 100#quad_sieve_size*2+1
-        temp_hmap = array.array('Q',[0]*size) ##Got to make sure the allocation size doesn't overflow.... 
-        temp_hmap[0]=1
-      #  while s < prime and s < quad_sieve_size+1:#2: ##To do: Dont need this if we restrict to z=1
-        s_inv=modinv(s*z_div,prime)
-        if s_inv == None or jacobi(s_inv,prime)!=1:
-            print("should this ever happen?")
-            return temp_hmap
-        root_mult=tonelli(s_inv,prime)
-        new_root=((main_root*root_mult))%prime
-        if (s*new_root**2-n)%prime !=0:
-            print("error2")
-        new_co=(2*s*new_root)%prime
-        if (s*new_root**2-new_co*new_root+n)%prime !=0: ###To do: For debug delete later
-            print("error")
-        if new_co > prime // 2:
-            new_co=(prime-new_co)%prime  
-        end=temp_hmap[0]
-        temp_hmap[end]=s
-        temp_hmap[end+1]=new_co
-        temp_hmap[0]+=2
-        s+=1   
-    except Exception as e:
-        print(e)
-    return temp_hmap
 
 
-@cython.profile(False)
+def solve_roots(prime,n):
+    hmap_p={}
+    iN=0
+    while iN < prime:
+        ja= jacobi(iN,prime )
+        if ja ==1:
+            root=tonelli(iN,prime)
+            if root > prime // 2:
+                root=-root%prime
+            roots=[root]#,(-root)%prime]
+            z=1
+            while z < prime:
+                for root in roots:
+                    res=(root**2-n*4*z)%prime
+                    if jacobi(res,prime) != -1:
+                        if jacobi(res,prime) == 1:
+                            y1=tonelli(res,prime)
+                            if y1 > prime // 2:
+                                y1=-y1%prime
+                        else:
+                            y1 =0
+                        try:
+                            c=hmap_p[str(z)]
+                            c.append([root,y1])
+                        except Exception as e:
+                            c=hmap_p[str(z)]=[[root,y1]]
+                z+=1
+        if ja ==0:  
+            roots=[0]
+            z=1
+            while z < prime:
+                for root in roots:
+                    res=(root**2-n*4*z)%prime
+                    if jacobi(res,prime) != -1:
+                        if jacobi(res,prime) == 1:
+                            y1=tonelli(res,prime)
+                            if y1 > prime // 2:
+                                y1=-y1%prime
+                        else:
+                            y1 =0
+                        try:
+                            c=hmap_p[str(z)]
+                            c.append([root,y1])
+                        except Exception as e:
+                            c=hmap_p[str(z)]=[[root,y1]]
+                z+=1
+        iN+=1  
+    return hmap_p
+
 def create_hashmap(n,procnum,return_dict,primeslist):
     i=0
     hmap=[]
@@ -592,22 +598,36 @@ cdef sieve(interval_list,valid_quads,roots,n,sprimelist_f,hmap,interval_list_pos
             #to do: Then mutate the root here
             j+=1
         i+=1
-    print("done")
+    #print("done")
     return
 
+def solve_lin_con(a,b,m):
+    ##ax=b mod m
+    #g=gcd(a,m)
+    #a,b,m = a//g,b//g,m//g
+    return pow(a,-1,m)*b%m  
+
+
+
+
+
 cdef construct_interval(list ret_array,partials,n,primeslist,hmap,large_prime_bound,primeslist2,small_primeslist):
-    
-
-
+    p=0
+    while p < len(hmap):
+        print("Prime: "+str(primeslist[p])+" hmap: "+str(hmap[p]))
+        p+=1
 
 
 
     cdef Py_ssize_t i
     cdef Py_ssize_t j
-    close_range =5
-    too_close = 1   ##TO DO: remove this small prime.. better to not have small primes 
+
     LOWER_BOUND_SIQS=1
+    UPPER_BOUND_SIQS=4000
     primelist_f=copy.copy(primeslist)
+
+    loop_list=copy.copy(primeslist)
+    loop_list.insert(0,2)
     primelist_f.insert(0,len(primelist_f)+1)
     primelist_f=array.array('q',primelist_f)
     cdef Py_ssize_t size
@@ -620,15 +640,12 @@ cdef construct_interval(list ret_array,partials,n,primeslist,hmap,large_prime_bo
     sprimelist_f=copy.copy(small_primeslist)
     sprimelist_f.insert(0,len(sprimelist_f)+1)
     sprimelist_f=array.array('q',sprimelist_f)
-    valid_quads,valid_quads_factors,interval_list,roots,interval_list_pos=filter_quads(z_plist,n)
-    print("[i]Filling in the intervals... this can take a while..")
-    sieve(interval_list,valid_quads,roots,n,primelist_f,hmap,interval_list_pos)
-    print("[i]Checking intervals for smooths")
+
     primeslist2.insert(0,2)
     primeslist2.insert(0,-1)
 
 
-    primeslist=array.array('q',primeslist)
+    
 
 
 
@@ -643,12 +660,100 @@ cdef construct_interval(list ret_array,partials,n,primeslist,hmap,large_prime_bo
 
     many_primes=[]    
 
-
-    tnum = int(((2*n)**mod_mul))
+    
+    M=lin_sieve_size
+  #  tnum = int(math.sqrt(2*n) / M)
+    tnum = n#int(((2*n)**mod_mul) / M)
     tnum_bit=int(bitlen(tnum)*1)
-    rootlist,polylist,flist,quadflist=generate_large_square(n,many_primes,valid_quads,valid_quads_factors,sprimelist_f,interval_list,roots,interval_list_pos,partials,large_prime_bound)
-    print("\nSmooths found: "+str(len(rootlist)))#+" rootlist: "+str(rootlist))
-    test=QS(n,sprimelist,polylist,rootlist,flist,quadflist,primeslist2)  
+    close_range =10
+    too_close = 5 
+    root_list=[]
+    poly_list=[]
+    flist=[]
+
+  
+  
+    l=1
+    while l < len(loop_list):
+        mult=loop_list[l]
+       # print("[i]Trying prime: ",mult)
+        z=n+1
+        x=1
+        div=modinv(mult,n)
+        i=0
+        acc=1
+        k=1
+        while i <100_000:
+        
+            
+        
+            poly_val=z*x**2-n*x
+            if (poly_val-x)%n!=0:
+                print("error")
+            diff=(poly_val-x)//n
+            if diff != (k-x):
+                print("fatal error")
+                time.sleep(1000)
+          #  print("poly_val: "+str(poly_val-n*(k-x))+" diff: "+str(diff)+" z: "+str(z)+" x: "+str(x)+" k: "+str(k))
+
+            if diff%1 !=0:
+                print("error")
+            quad_can=z
+
+            local_factors, value,seen_primes = factorise_fast(quad_can,primelist_f)
+            if value == 1:
+                new_root=quad_can*x
+                poly_val=new_root**2-n*(k)*quad_can
+                if poly_val % (quad_can*mult)!=0:
+                    print("fatal error")
+                    time.sleep(10000)
+                local_factors, value,seen_primes = factorise_fast(poly_val,primelist_f)
+                if value != 1:
+                    if value < large_prime_bound:
+                        if value in partials:
+                            rel, lf, pv = partials[value]
+                            if rel == new_root:
+                                i+=1
+                                continue
+                            new_root *= rel
+                            local_factors ^= lf
+                            poly_val *= pv
+                        else:
+                            partials[value] = (new_root, local_factors, poly_val)
+                            i+=1
+                            continue
+                    else:
+                        i+=1 
+                        continue
+
+
+              
+                        
+                if new_root not in root_list:
+                #print("adding")
+                    root_list.append(new_root)
+                    poly_list.append(poly_val)
+                    flist.append(local_factors)
+
+                    print("", end=f"[i]Smooths: {len(root_list)} / {base*1+2}\r")
+                    if len(root_list)>base+2:
+                        test=QS(n,primelist,poly_list,root_list,flist)  
+                        return
+            x*=mult
+            if z%mult !=0: #Secret math
+                s=solve_lin_con(n,-z,mult)
+                acc+=(x*s)//mult
+                k=x*acc
+            else:
+                k*=mult
+ 
+            z=(z*div)%n
+            
+
+
+            i+=1
+       # time.sleep(10000)
+        l+=1
     return
 
 cdef lift_root(r,prime,n,quad_co,exp):
@@ -901,7 +1006,5 @@ def main(l_keysize,l_workers,l_debug,l_base,l_key,l_lin_sieve_size,l_quad_sieve_
     launch(n,primeslist1,primeslist2,small_primeslist)     
     duration = default_timer() - start
     print("\nFactorization in total took: "+str(duration))
-
-
 
 
