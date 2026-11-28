@@ -25,7 +25,7 @@ Update: I've added sieving, plus this can trivially be sieved in 2d (with the wh
 
 UPDATE: EUREKA!!! I JUST CONFIRMED BEYOND A DOUBT. These two parameters: bound=100, min_exp=6 in psieve(), setting min_exp higher will actually change the sieve region a solution can be. 
 
-Now if I can just force  "if rr2%modulus == r1:" ... let me focus on that.. together with everything else I got so far, that would be the killing blow.
+Now if I can just force  "if rr2%modulus == r1:" ... let me focus on that.. together with everything else I got so far, that would be the killing blow. Thing is, I know that the correct root solution will be of shape r1+modulus*x  .. if the modulus is large, then the x will likely be smaller... and if its small... then that can be search for using residues... hmm... close close close...
 
 #### To run from folder "psieve":</br>
 To build: python3 setup.py build_ext --inplace</br>
