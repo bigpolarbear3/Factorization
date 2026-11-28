@@ -27,6 +27,8 @@ UPDATE: EUREKA!!! I JUST CONFIRMED BEYOND A DOUBT. These two parameters: bound=1
 
 Now if I can just force  "if rr2%modulus == r1:" ... let me focus on that.. together with everything else I got so far, that would be the killing blow. Thing is, I know that the correct root solution will be of shape r1+modulus*x  .. if the modulus is large, then the x will likely be smaller... and if its small... then that can be search for using residues... hmm... close close close...
 
+Update: Oh yea ofcourse.. since we have a polynomial that must solve for 0 in Z... then this means that a large coefficient will require a smaller root to solve for 0 in Z... so we can select a region where we will have a small root.. then search for the solution with residues... oooooooooooooooh shit. Get fcked.
+
 #### To run from folder "psieve":</br>
 To build: python3 setup.py build_ext --inplace</br>
 To run:  python3 run_qs.py -keysize 150 -base 10_000 -lin_size 10_000 -quad_size 1</br>
