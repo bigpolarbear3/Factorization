@@ -20,6 +20,8 @@ Pronounced the fuck you algorithm
 Update: Whats left is basically taking elements from psieve now, such as bitsieving and using a known b-smooth to optimize this algorithm (if we sieve with x^2-Nk to find an initial b smooth, then x should be the modulus from psieve()... I believe). In addition this condition in psieve() "if rr2%modulus == r1:" can be easilier forced by working with large coefficients, since it will shrink the size of roots to solve for 0.. 
 I'll try to manually implement starting from a known b-smooth myself and do the rest with claude since what remains is coding rather then research.
 
+Using singular roots this way basically gives an extra filter on possible "k" values... which will massively improve the psieve algorithm. So let me merge both now into the fuck you algorithm here. Because fuck you.
+
 #### To run from folder "psieve":</br>
 To build: python3 setup.py build_ext --inplace</br>
 To run:  python3 run_qs.py -keysize 150 -base 10_000 -lin_size 10_000 -quad_size 1</br>
