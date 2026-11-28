@@ -17,17 +17,8 @@ To run: python3 run_qs.py -keysize 50 -base 5000 -debug 0 -lin_size 10 -quad_siz
 
 Pronounced the fuck you algorithm
 
-Update: Did some more thinking.. even without sieving, it is already fairly strong (Stronger then the psieve algorithm below was without sieving). To make this super strong, the most important thing is to force this condition "if rr2%modulus == r1:"  in psieve() and not waste cpu cycles on anything else. I've been doing some analysis and should be able to implement this tomorrow. Aside from that, once that is done, we can make it more strong by using singular roots from an existing b-smooth... because that will garantuee the existence of a solution < N...
-
-Update: Figured out how to sieve the coefficients quite trivially. Let me implement that tomorrow.. that alone could be enough to begin getting obscene speeds. I'll upload a PoC tomorrow... I also have some ideas for forcing that condition I spoke about earlier... plus in the paper I talk about how the roots will basically be a multiple of either p or q (where p*q = N) ... so dividing out the roots to get rid of that multiplier is another strategy that I must consider... but that would still assume we have atleast the correct k_new value, because those divisors are encoded into that.
-
-Update: I've added sieving, plus this can trivially be sieved in 2d (with the while u2 < 10: being the second dimension). This needs to be bitsieving, but I'll add that later. While looking at this, because now we're working with a polynomial that must solve for 0... we can actually know which part of the sieve region a solution may be... this can be changed with the modulus size or the u2 parameter.. so I need to focus on that for a moment before I add bitsieving. Still also not forcing "if rr2%modulus == r1:" or using singular roots by using the factorization of an actual b-smooth... 
-
-UPDATE: EUREKA!!! I JUST CONFIRMED BEYOND A DOUBT. These two parameters: bound=100, min_exp=6 in psieve(), setting min_exp higher will actually change the sieve region a solution can be. 
-
-Now if I can just force  "if rr2%modulus == r1:" ... let me focus on that.. together with everything else I got so far, that would be the killing blow. Thing is, I know that the correct root solution will be of shape r1+modulus*x  .. if the modulus is large, then the x will likely be smaller... and if its small... then that can be search for using residues... hmm... close close close...
-
-Update: Oh yea ofcourse.. since we have a polynomial that must solve for 0 in Z... then this means that a large coefficient will require a smaller root to solve for 0 in Z... so we can select a region where we will have a small root.. then search for the solution with residues... oooooooooooooooh shit. Get fcked.
+Update: Whats left is basically taking elements from psieve now, such as bitsieving and using a known b-smooth to optimize this algorithm (if we sieve with x^2-Nk to find an initial b smooth, then x should be the modulus from psieve()... I believe). In addition this condition in psieve() "if rr2%modulus == r1:" can be easilier forced by working with large coefficients, since it will shrink the size of roots to solve for 0.. 
+I'll try to manually implement starting from a known b-smooth myself and do the rest with claude since what remains is coding rather then research.
 
 #### To run from folder "psieve":</br>
 To build: python3 setup.py build_ext --inplace</br>
