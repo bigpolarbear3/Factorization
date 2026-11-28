@@ -25,6 +25,8 @@ Update: I've added sieving, plus this can trivially be sieved in 2d (with the wh
 
 UPDATE: EUREKA!!! I JUST CONFIRMED BEYOND A DOUBT. These two parameters: bound=100, min_exp=6 in psieve(), setting min_exp higher will actually change the sieve region a solution can be. 
 
+Now if I can just force  "if rr2%modulus == r1:" ... let me focus on that.. together with everything else I got so far, that would be the killing blow.
+
 #### To run from folder "psieve":</br>
 To build: python3 setup.py build_ext --inplace</br>
 To run:  python3 run_qs.py -keysize 150 -base 10_000 -lin_size 10_000 -quad_size 1</br>
